@@ -3,7 +3,9 @@ import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 
 class FilesController {
-  static async getShow(req, res) {
+  // Existing methods...
+
+  static async putPublish(req, res) {
     const { 'x-token': token } = req.headers;
     const { id } = req.params;
 
@@ -21,18 +23,22 @@ class FilesController {
     const file = await dbClient
       .client.db(dbClient.database)
       .collection('files')
-      .findOne({ _id: ObjectId(id), userId });
+      .findOneAndUpdate(
+        { _id: ObjectId(id), userId },
+        { $set: { isPublic: true } },
+        { returnDocument: 'after' }
+      );
 
-    if (!file) {
+    if (!file.value) {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    return res.status(200).json(file);
+    return res.status(200).json(file.value);
   }
 
-  static async getIndex(req, res) {
+  static async putUnpublish(req, res) {
     const { 'x-token': token } = req.headers;
-    const { parentId = '0', page = '0' } = req.query;
+    const { id } = req.params;
 
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -45,24 +51,20 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const pipeline = [
-      {
-        $match: {
-          userId,
-          parentId: parentId === '0' ? ObjectId(parentId) : parentId,
-        },
-      },
-      { $skip: parseInt(page) * 20 },
-      { $limit: 20 },
-    ];
-
-    const files = await dbClient
+    const file = await dbClient
       .client.db(dbClient.database)
       .collection('files')
-      .aggregate(pipeline)
-      .toArray();
+      .findOneAndUpdate(
+        { _id: ObjectId(id), userId },
+        { $set: { isPublic: false } },
+        { returnDocument: 'after' }
+      );
 
-    return res.status(200).json(files);
+    if (!file.value) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    return res.status(200).json(file.value);
   }
 }
 
